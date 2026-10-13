@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Scout"
+description = "Scout is an internship and job finder for students. You set what you're looking for (role, location, seniority, visa needs, funding), and Scout uses TinyFish Search, Fetch and Agent to discover and read live openings from company careers pages, job boards and funded research-internship programs, then returns deduplicated, ranked listings with apply links and keeps them fresh."
+version = "1.0.0"
+id = "artifacts/scout"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22603
+
+[services.development]
+run = "pnpm --filter @workspace/scout run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/scout", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/scout/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22603"
+BASE_PATH = "/"

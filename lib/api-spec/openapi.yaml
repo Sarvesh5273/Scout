@@ -1,0 +1,1088 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Scout API — an internship and job finder that uses TinyFish Search, Fetch and Agent to discover and read live openings.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: hunts
+    description: Saved searches ("hunts") and their preferences
+  - name: runs
+    description: Executions of a hunt against the live web
+  - name: listings
+    description: Deduplicated, ranked openings found for a hunt
+  - name: meta
+    description: Presets and usage
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /presets:
+    get:
+      operationId: listPresets
+      tags: [meta]
+      summary: Example searches a user can start from
+      responses:
+        "200":
+          description: Presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HuntPreset"
+
+  /access:
+    get:
+      operationId: getAccess
+      tags: [meta]
+      summary: Whether this browser sent a valid reviewer pass (X-Scout-Pass header)
+      responses:
+        "200":
+          description: Access level
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Access"
+
+  /usage:
+    get:
+      operationId: getUsage
+      tags: [meta]
+      summary: Aggregate TinyFish usage and tracking totals across Scout
+      responses:
+        "200":
+          description: Usage totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usage"
+
+  /hunts:
+    get:
+      operationId: listHunts
+      tags: [hunts]
+      summary: The caller's hunts plus public showcase hunts
+      responses:
+        "200":
+          description: Hunts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hunt"
+    post:
+      operationId: createHunt
+      tags: [hunts]
+      summary: Create a hunt from preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HuntInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hunt"
+        "400":
+          description: Invalid preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many hunts for this browser
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hunts/{huntId}:
+    parameters:
+      - $ref: "#/components/parameters/HuntId"
+    get:
+      operationId: getHunt
+      tags: [hunts]
+      summary: Get one hunt
+      responses:
+        "200":
+          description: Hunt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hunt"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateHunt
+      tags: [hunts]
+      summary: Rename a hunt or change its preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HuntUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hunt"
+        "400":
+          description: Invalid preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Showcase hunts are read-only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteHunt
+      tags: [hunts]
+      summary: Delete a hunt and its results
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Showcase hunts are read-only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hunts/{huntId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/HuntId"
+    get:
+      operationId: listHuntRuns
+      tags: [runs]
+      summary: Run history for a hunt, newest first
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunSummary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: startHuntRun
+      tags: [runs]
+      summary: Search the live web for this hunt now
+      description: Starts a run in the background and returns immediately. Poll getRun for progress.
+      responses:
+        "202":
+          description: Run started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummary"
+        "403":
+          description: Showcase hunts refresh on a schedule only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A run is already in progress for this hunt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit or daily budget reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /runs/{runId}:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Run status with its live event log
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Flat route on purpose: an operation with both path and query params makes Orval emit
+  # two exports named ListXParams (zod path schema + TS query type), which breaks the api-zod barrel.
+  /listings:
+    get:
+      operationId: listListings
+      tags: [listings]
+      summary: Ranked, deduplicated listings for one hunt
+      parameters:
+        - name: huntId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: view
+          in: query
+          required: false
+          description: all = everything not hidden; new = first seen in the latest run
+          schema:
+            type: string
+            enum: [all, new, saved, hidden]
+            default: all
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [job, program]
+        - name: visa
+          in: query
+          required: false
+          description: sponsors = only listings that offer sponsorship; not_restricted = hide listings that rule it out
+          schema:
+            type: string
+            enum: [any, sponsors, not_restricted]
+            default: any
+        - name: funding
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [any, paid, fully_funded]
+            default: any
+        - name: minScore
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [score, newest, deadline]
+            default: score
+        - name: q
+          in: query
+          required: false
+          description: Text filter on title, organization and location
+          schema:
+            type: string
+            maxLength: 80
+      responses:
+        "200":
+          description: Listings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Listing"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hunts/{huntId}/listings/{listingId}:
+    parameters:
+      - $ref: "#/components/parameters/HuntId"
+      - name: listingId
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateHuntListing
+      tags: [listings]
+      summary: Save or hide a listing within a hunt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListingFlags"
+      responses:
+        "200":
+          description: Updated listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+        "403":
+          description: Showcase hunts are read-only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hunts/{huntId}/summary:
+    parameters:
+      - $ref: "#/components/parameters/HuntId"
+    get:
+      operationId: getHuntSummary
+      tags: [listings]
+      summary: Counts and highlights for a hunt's results
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HuntSummary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hunts/{huntId}/sources:
+    parameters:
+      - $ref: "#/components/parameters/HuntId"
+    get:
+      operationId: listHuntSources
+      tags: [listings]
+      summary: Every careers page, job board and program page Scout checked for this hunt
+      responses:
+        "200":
+          description: Sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Source"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    HuntId:
+      name: huntId
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    Seniority:
+      type: string
+      enum: [internship, new_grad, entry_level, experienced]
+
+    OpportunityType:
+      type: string
+      description: company_roles = jobs on careers pages and job boards; research_programs = funded internship programs at universities, labs and agencies
+      enum: [company_roles, research_programs]
+
+    FundingPreference:
+      type: string
+      enum: [any, paid, fully_funded]
+
+    HuntPreferences:
+      type: object
+      required:
+        - roles
+        - keywords
+        - excludeKeywords
+        - locations
+        - remoteOk
+        - seniority
+        - opportunityTypes
+        - needsVisaSponsorship
+        - citizenship
+        - funding
+        - companies
+      properties:
+        roles:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            minLength: 2
+            maxLength: 80
+        keywords:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+        excludeKeywords:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+        locations:
+          type: array
+          description: Countries or cities. Empty means anywhere.
+          maxItems: 6
+          items:
+            type: string
+            minLength: 2
+            maxLength: 60
+        remoteOk:
+          type: boolean
+        seniority:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Seniority"
+        opportunityTypes:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OpportunityType"
+        needsVisaSponsorship:
+          type: boolean
+        citizenship:
+          type: ["string", "null"]
+          description: The user's citizenship, used for eligibility and visa matching (e.g. "India")
+          maxLength: 60
+        funding:
+          $ref: "#/components/schemas/FundingPreference"
+        companies:
+          type: array
+          description: Optional companies to check directly. Scout also discovers others.
+          maxItems: 10
+          items:
+            type: string
+            minLength: 2
+            maxLength: 60
+
+    HuntInput:
+      type: object
+      required: [preferences]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        preferences:
+          $ref: "#/components/schemas/HuntPreferences"
+
+    HuntUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        preferences:
+          $ref: "#/components/schemas/HuntPreferences"
+
+    HuntCounts:
+      type: object
+      required: [total, new, saved]
+      properties:
+        total:
+          type: integer
+        new:
+          type: integer
+        saved:
+          type: integer
+
+    Hunt:
+      type: object
+      required:
+        - id
+        - name
+        - preferences
+        - readOnly
+        - isShowcase
+        - createdAt
+        - updatedAt
+        - lastRunAt
+        - nextRefreshAt
+        - counts
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        preferences:
+          $ref: "#/components/schemas/HuntPreferences"
+        readOnly:
+          type: boolean
+          description: True for showcase hunts owned by Scout; they can be viewed but not edited or run manually
+        isShowcase:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+        nextRefreshAt:
+          type: ["string", "null"]
+          format: date-time
+          description: When Scout will next re-check this hunt automatically
+        latestRun:
+          $ref: "#/components/schemas/RunSummary"
+        counts:
+          $ref: "#/components/schemas/HuntCounts"
+
+    HuntPreset:
+      type: object
+      required: [id, title, description, preferences]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        preferences:
+          $ref: "#/components/schemas/HuntPreferences"
+
+    RunStatus:
+      type: string
+      enum: [queued, running, completed, partial, failed]
+
+    RunTrigger:
+      type: string
+      enum: [manual, scheduled]
+
+    RunStats:
+      type: object
+      required:
+        - searches
+        - pagesRead
+        - agentRuns
+        - sourcesChecked
+        - listingsFound
+        - newListings
+        - estimatedCostUsd
+      properties:
+        searches:
+          type: integer
+          description: TinyFish Search queries made
+        pagesRead:
+          type: integer
+          description: Pages read with TinyFish Fetch
+        agentRuns:
+          type: integer
+          description: TinyFish Agent runs (browser automation on portals Fetch can't read)
+        sourcesChecked:
+          type: integer
+        listingsFound:
+          type: integer
+        newListings:
+          type: integer
+        estimatedCostUsd:
+          type: number
+
+    RunSummary:
+      type: object
+      required: [id, huntId, status, trigger, startedAt, finishedAt, stats, error]
+      properties:
+        id:
+          type: integer
+        huntId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        trigger:
+          $ref: "#/components/schemas/RunTrigger"
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: ["string", "null"]
+          format: date-time
+        stats:
+          $ref: "#/components/schemas/RunStats"
+        error:
+          type: ["string", "null"]
+
+    RunEventStage:
+      type: string
+      enum: [plan, search, fetch, agent, extract, match, done, warning, error]
+
+    RunEventTool:
+      type: string
+      description: Which part of Scout produced the event
+      enum: [search, fetch, agent, ai, system]
+
+    RunEvent:
+      type: object
+      required: [id, at, stage, tool, message, url]
+      properties:
+        id:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        stage:
+          $ref: "#/components/schemas/RunEventStage"
+        tool:
+          $ref: "#/components/schemas/RunEventTool"
+        message:
+          type: string
+        url:
+          type: ["string", "null"]
+
+    Run:
+      type: object
+      required: [id, huntId, status, trigger, startedAt, finishedAt, stats, error, events]
+      properties:
+        id:
+          type: integer
+        huntId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        trigger:
+          $ref: "#/components/schemas/RunTrigger"
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: ["string", "null"]
+          format: date-time
+        stats:
+          $ref: "#/components/schemas/RunStats"
+        error:
+          type: ["string", "null"]
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunEvent"
+
+    ListingKind:
+      type: string
+      enum: [job, program]
+
+    WorkMode:
+      type: string
+      enum: [onsite, hybrid, remote, unknown]
+
+    ListingSeniority:
+      type: string
+      enum: [internship, new_grad, entry_level, experienced, unknown]
+
+    VisaStatus:
+      type: string
+      description: sponsors = posting offers visa sponsorship or support; not_sponsored = says it won't sponsor or requires existing work authorization; citizens_only = restricted to certain citizenships
+      enum: [sponsors, not_sponsored, citizens_only, unknown]
+
+    FundingLevel:
+      type: string
+      description: fully_funded = stipend plus travel and/or housing covered; paid = salary or stipend; unpaid = explicitly unpaid
+      enum: [fully_funded, paid, unpaid, unknown]
+
+    ListingStatus:
+      type: string
+      enum: [open, closed, unverified]
+
+    FoundVia:
+      type: string
+      description: The TinyFish capability that surfaced this listing
+      enum: [search, fetch, agent]
+
+    VisaInfo:
+      type: object
+      required: [status, note]
+      properties:
+        status:
+          $ref: "#/components/schemas/VisaStatus"
+        note:
+          type: ["string", "null"]
+          description: Short quote or paraphrase from the posting that supports the status
+
+    FundingInfo:
+      type: object
+      required: [level, stipend, travel, housing, note]
+      properties:
+        level:
+          $ref: "#/components/schemas/FundingLevel"
+        stipend:
+          type: ["boolean", "null"]
+        travel:
+          type: ["boolean", "null"]
+        housing:
+          type: ["boolean", "null"]
+        note:
+          type: ["string", "null"]
+
+    Listing:
+      type: object
+      required:
+        - id
+        - title
+        - organization
+        - kind
+        - locations
+        - workMode
+        - seniority
+        - employmentType
+        - applyUrl
+        - sourceUrl
+        - sourceLabel
+        - foundVia
+        - postedAt
+        - deadline
+        - visa
+        - funding
+        - eligibility
+        - summary
+        - score
+        - reasons
+        - isNew
+        - saved
+        - hidden
+        - status
+        - firstSeenAt
+        - lastSeenAt
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        organization:
+          type: string
+        kind:
+          $ref: "#/components/schemas/ListingKind"
+        locations:
+          type: array
+          items:
+            type: string
+        workMode:
+          $ref: "#/components/schemas/WorkMode"
+        seniority:
+          $ref: "#/components/schemas/ListingSeniority"
+        employmentType:
+          type: ["string", "null"]
+        applyUrl:
+          type: string
+        sourceUrl:
+          type: string
+        sourceLabel:
+          type: string
+          description: Where Scout read it, e.g. "Greenhouse board" or "Program page"
+        foundVia:
+          $ref: "#/components/schemas/FoundVia"
+        postedAt:
+          type: ["string", "null"]
+          format: date
+        deadline:
+          type: ["string", "null"]
+          format: date
+        visa:
+          $ref: "#/components/schemas/VisaInfo"
+        funding:
+          $ref: "#/components/schemas/FundingInfo"
+        eligibility:
+          type: ["string", "null"]
+        summary:
+          type: ["string", "null"]
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        reasons:
+          type: array
+          description: Short reasons this listing matches (or partly matches) the hunt
+          items:
+            type: string
+        isNew:
+          type: boolean
+          description: First seen in the hunt's latest run
+        saved:
+          type: boolean
+        hidden:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/ListingStatus"
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+
+    ListingFlags:
+      type: object
+      properties:
+        saved:
+          type: boolean
+        hidden:
+          type: boolean
+
+    KindCounts:
+      type: object
+      required: [job, program]
+      properties:
+        job:
+          type: integer
+        program:
+          type: integer
+
+    VisaCounts:
+      type: object
+      required: [sponsors, not_sponsored, citizens_only, unknown]
+      properties:
+        sponsors:
+          type: integer
+        not_sponsored:
+          type: integer
+        citizens_only:
+          type: integer
+        unknown:
+          type: integer
+
+    FundingCounts:
+      type: object
+      required: [fully_funded, paid, unpaid, unknown]
+      properties:
+        fully_funded:
+          type: integer
+        paid:
+          type: integer
+        unpaid:
+          type: integer
+        unknown:
+          type: integer
+
+    OrganizationCount:
+      type: object
+      required: [organization, count]
+      properties:
+        organization:
+          type: string
+        count:
+          type: integer
+
+    DeadlineItem:
+      type: object
+      required: [listingId, title, organization, deadline]
+      properties:
+        listingId:
+          type: integer
+        title:
+          type: string
+        organization:
+          type: string
+        deadline:
+          type: string
+          format: date
+
+    HuntSummary:
+      type: object
+      required:
+        - total
+        - new
+        - saved
+        - hidden
+        - byKind
+        - byVisa
+        - byFunding
+        - topOrganizations
+        - upcomingDeadlines
+        - sourcesChecked
+        - lastRunAt
+      properties:
+        total:
+          type: integer
+        new:
+          type: integer
+        saved:
+          type: integer
+        hidden:
+          type: integer
+        byKind:
+          $ref: "#/components/schemas/KindCounts"
+        byVisa:
+          $ref: "#/components/schemas/VisaCounts"
+        byFunding:
+          $ref: "#/components/schemas/FundingCounts"
+        topOrganizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationCount"
+        upcomingDeadlines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeadlineItem"
+        sourcesChecked:
+          type: integer
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+
+    SourceKind:
+      type: string
+      enum: [careers_page, job_board, program_page, aggregator, posting]
+
+    SourceReadMethod:
+      type: string
+      enum: [fetch, agent]
+
+    SourceStatus:
+      type: string
+      enum: [ok, empty, blocked, failed]
+
+    Source:
+      type: object
+      required: [id, label, url, kind, readMethod, status, listingsFound, lastCheckedAt, note]
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        url:
+          type: string
+        kind:
+          $ref: "#/components/schemas/SourceKind"
+        readMethod:
+          $ref: "#/components/schemas/SourceReadMethod"
+        status:
+          $ref: "#/components/schemas/SourceStatus"
+        listingsFound:
+          type: integer
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        note:
+          type: ["string", "null"]
+
+    Access:
+      type: object
+      required: [reviewer]
+      properties:
+        reviewer:
+          type: boolean
+          description: True when the request carried a valid reviewer pass, so its searches can use the capacity held back for reviewers
+
+    Usage:
+      type: object
+      required:
+        - searches
+        - pagesRead
+        - agentRuns
+        - agentCostUsd
+        - listingsTracked
+        - organizationsTracked
+        - runsCompleted
+        - since
+      properties:
+        searches:
+          type: integer
+        pagesRead:
+          type: integer
+        agentRuns:
+          type: integer
+        agentCostUsd:
+          type: number
+        listingsTracked:
+          type: integer
+        organizationsTracked:
+          type: integer
+        runsCompleted:
+          type: integer
+        since:
+          type: ["string", "null"]
+          format: date-time

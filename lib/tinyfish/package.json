@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/tinyfish",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tiny-fish/sdk": "^0.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}
